@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Project Health Check</title>
+    <link rel="stylesheet" href="index.css">
+    <script src="https://unpkg.com/vue@3"></script>
+</head>
+<body>
+
+<div id="app">
+    <header><h1>Project Health Check</h1></header>
+    <main>
+        <div>
+            <table>
+                <tr>
+                    <th>Factors<img v-on:click="setModal(true, 1)" src="svg/circle-info.svg"/></th>
+                    <th>Weight<img v-on:click="setModal(true, 2)" src="svg/circle-info.svg"/></th>
+                    <th>Value<img v-on:click="setModal(true, 3)" src="svg/circle-info.svg"/></th>
+                    <th>Enable</th>
+                </tr>
+                <tr v-for="factor in factors">
+                    <td>{{ factor.name }}</td>
+                    <td><input :disabled="!factor.enable" v-model="factor.weight" :max=100 :min="0" class="input-factor" type="number"></td>
+                    <td><input :disabled="!factor.enable" v-model="factor.value" :max=100 :min="0" class="input-factor" type="number"></td>
+                    <td><input v-model="factor.enable" class="input-factor" type="checkbox"></td>
+                </tr>
+            </table>
+        </div>
+    </main>
+
+    <aside>
+        <!--Tool Output-->
+        <div id="health-container">
+            <h3>Project Health</h3>
+            <img v-on:click="setModal(true, 4)" src="svg/circle-info.svg"/>
+            <p id="health">{{projectHealth}}</p>
+            <hr>
+            <br>
+            <h3>{{getMeaning(projectHealth)}}</h3>
+        </div>
+
+        <!--Suggestions/Tips-->
+        <div id="problem-container">
+            <h3>Advice</h3>
+            <p>{{getHealthAdvice(projectHealth)}}</p>
+            <template v-for="factor in factors">
+                <p v-if="(factor.value <= factor.adviceThreshold) && factor.enable">
+                    {{ factor.advice }}
+                </p>
+            </template>
+        </div>
+    </aside>
+    <footer>© 2022, Project Health Check</footer>
+
+    <!--  Modal/Overlay  -->
+    <div class="modal" v-if="this.modalOpen" v-on:click="handleModalClick">
+        <div class="modal-content">
+            <!--Only one of the divs below are visible at a time-->
+            <img v-on:click="setModal(false)" src="svg/x-square.svg"/>
+
+            <!--  Factors and descriptions  -->
+            <div v-if="this.modalContent === 1" id="modal-factors">
+                <div v-for="factor in factors">
+                    <h3>{{factor.name}}</h3>
+                    <p>{{factor.description}}</p>
+                </div>
+            </div>
+
+            <!--  What Do the Weights Mean  -->
+            <div v-if="this.modalContent === 2">
+                <h2>What Do the Weights Mean?</h2>
+                <p>The Weight can be any value between 0 and 100 inclusive. The weighting can be thought of as a measure of importance, the larger the value the more important the lower the value the less important. Initially weights are populated with defaults values that have been calculated. </p>
+
+                <h4 style="margin-bottom: 0">A Weight of 0</h4>
+                <p style="margin-top: 0; padding-left: 1em">The input value would have no influence upon the output, it would be said the factor has no importance. </p>
+
+                <h4 style="margin-bottom: 0">A Weight of 100</h4>
+                <p style="margin-top: 0; padding-left: 1em">The input value would have maximum influence upon the output, it would be said the factor has significant importance.  </p>
+                <p style="padding-left: 1em">For example, assume all other weightings and factors are excluded. The output value, Project Health, will correspond directly to the input value. If the input value is zero the Project Health will be the same, if the input value is 50 the Project Health will be 50. </p>
+
+                <h4 style="margin-bottom: 0">A Weight of <i>n</i></h4>
+                <p style="margin-top: 0; padding-left: 1em">With a weight of <i>n</i> the input value will only have a maximum influence of <i>n</i>% upon the Project Health value. In other words, the input value is only able to deduct between 0% and <i>n</i>% of the current Project Health depending upon its value.</p>
+                <p style="padding-left: 1em">For example, one factor with a weight of 50 and the value of 0 has an output value of 50, two Factors would have the output value of 25 and three Factor would be 12.5.</p>
+
+                <h2>How Are Weights Calculated?</h2>
+                <p style="padding-left: 1em">
+                    For each source, Novopay or Queensland Health, the frequency of each factor is calculated
+                    as a percentage by dividing it by the number of times it occurs by the total number of factor occurrences.
+                </p>
+                <p style="padding-left: 1em">
+                    Next the percentages from each source are scaled up such that the largest number is 100 (percentage * 100 / max(percentages)).
+                </p>
+                <p style="padding-left: 1em">
+                    Next, the Average Importance is calculated by taking the average between factor from each source.
+                </p>
+                <p style="padding-left: 1em">
+                    Finally, the weightings are calculated by multiplying each Average Importance by a constant,
+                    for example 0.5, to fine tune the final Project Health.
+                </p>
+
+            </div>
+
+            <div v-if="this.modalContent === 3" id="modal-value">
+                <h2>What Does the Value Mean?</h2>
+                <p>{{valueMeaning}}(Click Here <img v-on:click="setModal(true, 2)" src="svg/circle-info.svg"/>)</p>
+                <table class="value-table">
+                    <tr>
+                        <th>Value</th>
+                        <th v-for="tableRow in valueTable">{{tableRow.value}}</th>
+                    </tr>
+                    <tr>
+                        <th>Meaning</th>
+                        <td v-for="tableRow in valueTable">{{tableRow.text}}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div v-if="this.modalContent === 4">
+                <h2>What Does Project Health Mean?</h2>
+                <p>{{healthMeaning}}</p>
+                <table class="value-table">
+                    <tr>
+                        <th>Value</th>
+                        <th v-for="tableRow in healthTable">{{tableRow.value}}</th>
+                    </tr>
+                    <tr>
+                        <th>Meaning</th>
+                        <td v-for="tableRow in healthTable">{{tableRow.text}}</td>
+                    </tr>
+                </table>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const AllocationOfResourceDescription = `
+    When considering this factor you should consider how resources have been allocated throughout your project.
+    Some resources you might consider are Personnel, Time, Finances, Technologies and Equipment.
+    You should also consider how project resources are being used and if they are being used efficiently.`;
+
+    const ScopeDescription = `
+    When considering this factor you should assess the quality of the project scope and the methodology
+    used to create it. The same should be assessed for the project requirements.
+    You should also assess how closely your project is following the scope and requirements.
+    Additionally, the number of changes being made to the scope and requirements can also be used in your assessment.
+    It is important to make any assessment of the Scope or Requirements on evidence rather than feelings.`;
+
+    const GoalsDescription = `This factor is all about setting, meeting, achieving,
+    and keeping milestones goals and control gates. Examine your project, look at your
+    current set of milestones goals and control gates, are they being met,
+    are they achievable, are they sufficiently and appropriately defined?
+    Also consider any processes you have around milestones goals and control gates,
+    are they robust and have been correctly implemented?`;
+
+    const TestingDescription = `This factor is all about tests of all varieties.
+    You should consider what tests you have in place, their usefulness, and quality.
+    Are tests being completed correctly, is there sufficient test coverage?
+    How do your tests relate to your milestones or goals?`;
+
+    const RelationshipsDescription = `The relationship between people, teams,
+    and companies can be significant in some types of projects. Unfortunately,
+    it can be sometimes exceedingly difficult to judge.
+    When assessing this factor try to envision yourself in the situation of others,
+    has there, recently, been situations of tension, mistrust, or conflicts.`;
+
+    const GovernanceDescription = `Governance is a broad factor that includes processes, procedures,
+    and high-level management decisions. Assess your current set of processes,
+    are they appropriate, are there any deficiencies? Have there been any recent incidents
+    that have been because of a lack of adequate processes or procedures? In hindsight has
+    there been a considerable number of poorly made decisions, if so, what was the cause?`;
+
+    const ValueMeaning = `A Value can be any number between 0 and 100 inclusive. It should be chosen by you,
+    the user, to reflect your assessment of your project regarding each factor. The output,
+    Project Health, is calculated from a combination of both Weight and Value so
+    the effect the Value has on the output depends on the Weight. In general,
+    a Value of 0 is bad and a Value of 100 is good. For more specific information refer to
+    the factors information modal.`;
+
+    const HealthMeaning = `Project Health can be used to see potential problems before they are realized but
+     is intended to give only a general indication of the health of a project  and it should not be taken as an absolute.
+     Project Health can be of any value between 0 and 100. Zero being extremely poor health and 100 being perfect health.`;
+
+    const valueTable = [
+        {value: 0, text: "Extremely bad with no possibility of improvement. Example, the building is on file."},
+        {value: 30, text: "Serious deficiencies or problems that need immediate and firm action."},
+        {value: 50, text: "Significant deficiencies or problems that need action to prevent further degradation."},
+        {value: 70, text: "Borderline acceptable, no immediate action may be required but must be watched closely."},
+        {value: 90, text: "Good, with only small problems that are not likely to have a large negative impact on the project in the long term."},
+        {value: 100, text: "Perfect, no problems or deficiencies with no chance of having any negative impact on the project."},
+    ];
+
+    const healthTable = [
+        {value: 0, text: "Strong chance of complete irrecoverable project failure."},
+        {value: 30, text: "Imminent project failure, project reset strongly recommended."},
+        {value: 50, text: "High chance of project failure, action should be taken to stabilize the project."},
+        {value: 70, text: "Overall likely project success, increased chance of partial success."},
+        {value: 90, text: "Strong chance of complete project success, no actions required."},
+        {value: 100, text: "Perfect, extremely likely project success."},
+    ];
+
+
+    Vue.createApp({
+        data() {
+            return {
+                factors: [
+                    { name: "Allocation of Resource", value: 100, weight: 34, enable: true, description: AllocationOfResourceDescription, adviceThreshold: 68, advice: "Keep a close eye on resources."},
+                    { name: "Scope and Requirements", value: 100, weight: 48, enable: true, description: ScopeDescription, adviceThreshold: 65, advice: "Consider talking to user's who will use your system."},
+                    { name: "Goals and Milestones", value: 100, weight: 25, enable: true, description: GoalsDescription, adviceThreshold: 65, advice: "Re-evaluate your project timeline if necessary."},
+                    { name: "Testing", value: 100, weight: 27, enable: true, description: TestingDescription, adviceThreshold: 70, advice: "Ensure testing plans are in place."},
+                    { name: "Relationships", value: 100, weight: 16, enable: true, description: RelationshipsDescription, adviceThreshold: 65, advice: "Don't allow a bad relationship to get worse."},
+                    { name: "Governance", value: 100, weight: 48, enable: true, description: GovernanceDescription, adviceThreshold: 70, advice: "Conduct regular audits."},
+                ],
+                modalOpen: false,
+                modalContent: 0,
+                valueTable: valueTable,
+                healthTable: healthTable,
+                valueMeaning: ValueMeaning,
+                healthMeaning: HealthMeaning
+            }
+        },
+        methods: {
+            getMeaning(health) {
+                for (let i = this.healthTable.length - 1; i >= 0; i--) {
+                    let row = this.healthTable[i];
+                    if (health >= row.value) return row.text;
+
+                }
+            },
+            getHealthAdvice(health) {
+                if(health < 10){
+                    return "Your project has some serious problems, a project reset might be appropriate.";
+                } else if (health < 20) {
+                    return "Your project has some serious problems, a project reset might be appropriate.";
+                } else if (health < 30) {
+                    return "Your project has some serious problems, immediate action is required.";
+                } else if (health < 40) {
+                    return "Your project has some significant problems, immediate action is required.";
+                } else if (health < 50) {
+                    return "Your project is struggling you should take actions to improve the situation.";
+                } else if (health < 65) {
+                    return "Your project is struggling, keep an eye on it.";
+                } else if (health < 75) {
+                    return "Your project is not in imminent danger but keep an eye on it.";
+                } else if (health < 80) {
+                    return "There are some areas you could improve.";
+                } else if (health < 90) {
+                    return "Everything looks good.";
+                } else return "Everything looks good."
+            },
+            setModal(open, content){
+                this.modalOpen = open;
+                this.modalContent = content || "";
+            },
+            handleModalClick(event) {
+                let className = event.path[0] ? event.path[0].className : 0;
+                if(className === "modal") this.modalOpen = false;
+            }
+        },
+        computed: {
+            projectHealth() {
+                // bit shit but that's ok!
+                return this.factors.reduce((a, factor)=> {
+                    let weight = factor.weight / 100;
+                    let value = factor.value;
+                    let number = 1 - (weight - (weight * value / 100))
+                    return a * (factor.enable ? number : 1);
+                }, 100).toFixed(2)
+            }
+        }
+    }).mount('#app');
+</script>
+
+</body>
+</html>
